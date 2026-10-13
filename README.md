@@ -1,9 +1,9 @@
 # iroh-connector
 
-A **remote gateway connector** for Hermes — the first concrete implementation
-of the `RemoteConnector` seam (`gateway/remote_connectors.py` on the
-hermes-agent side). iroh does what `https://` cannot: connects two machines
-with **no port-forwarding, no public URL, no DNS** — QUIC over relays,
+A **remote gateway connector** for Hermes.
+
+`iroh` does what `https://` cannot: connects two machines with 
+**no port-forwarding, no public URL, no DNS** — QUIC over relays,
 `relay.agentbox.tech` by default (ours), n0 fallback.
 
 ## What lives where
