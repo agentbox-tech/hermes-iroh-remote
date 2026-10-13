@@ -207,7 +207,96 @@ class IrohConnector(RemoteConnector):
                            target_url=gateway_url, teardown=teardown)
 
     async def connect(self, saved_url: str) -> RemoteTarget:
-        raise NotImplementedError("dial from a headless server is not wired yet — use the desktop connector")
+        """Dial a saved ``iroh://<ticket>`` to a loopback access point.
+
+        One persistent QUIC connection; one bidi stream per accepted TCP
+        connection (mirror of the serve side's accept-loop). Loopback port
+        is deterministic from the ticket so cookie-scoped sessions survive
+        restarts, walking forward on collision."""
+        iroh = _import_iroh()
+        ticket = self.normalize(saved_url)[len("iroh://"):]
+
+        builder = iroh.EndpointBuilder()
+        builder.apply_n0()
+        endpoint = await builder.bind()
+
+        try:
+            addr = iroh.EndpointTicket.from_string(ticket).endpoint_addr()
+            conn = await endpoint.connect(addr, ALPN)
+        except Exception:
+            await endpoint.close()
+            raise
+
+        async def handle_client(reader, writer) -> None:
+            try:
+                stream = await conn.open_bi()
+            except Exception as exc:
+                print(f"[iroh-connector] open_bi failed: {exc}", flush=True)
+                writer.close()
+                return
+
+            rs, ss = stream.recv(), stream.send()
+
+            async def iroh_to_tcp():
+                try:
+                    while True:
+                        data = await rs.read(READ_CHUNK)
+                        if not data:
+                            break
+                        writer.write(data)
+                        await writer.drain()
+                finally:
+                    writer.close()
+                    try:
+                        await writer.wait_closed()
+                    except Exception:
+                        pass
+
+            async def tcp_to_iroh():
+                try:
+                    while True:
+                        data = await reader.read(READ_CHUNK)
+                        if not data:
+                            break
+                        await ss.write(data)
+                finally:
+                    await ss.finish()
+
+            await asyncio.gather(iroh_to_tcp(), tcp_to_iroh(), return_exceptions=True)
+
+        server = None
+        last_err = None
+
+        for port in self._candidate_ports(ticket):
+            try:
+                server = await asyncio.start_server(handle_client, "127.0.0.1", port)
+                break
+            except OSError as exc:
+                last_err = exc
+
+        if server is None:
+            await endpoint.close()
+            raise RuntimeError(f"iroh-connector: no free loopback port ({last_err})")
+
+        async def teardown() -> None:
+            server.close()
+            await server.wait_closed()
+            try:
+                conn.close(0, [])
+            except Exception:
+                pass
+            await endpoint.close()
+
+        return RemoteTarget(base_url=f"http://127.0.0.1:{port}",
+                            teardown=teardown, host_label=f"iroh:{ticket[:8]}")
+
+    @staticmethod
+    def _candidate_ports(ticket: str) -> list[int]:
+        h = 0
+        for ch in ticket:
+            h = (h * 31 + ord(ch)) & 0x7FFFFFFF
+        start = 19100 + h % 400
+        return [start + i for i in range(20)]
 
 
 def register(ctx) -> None:
