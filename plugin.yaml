@@ -1,0 +1,5 @@
+name: iroh-connector
+version: 0.1.0
+description: "Remote gateway connector over iroh P2P — serve this box's gateway and dial remote gateways via iroh:// tickets, no port-forwarding, own relay configurable."
+provides_remote_connectors:
+  - iroh
