@@ -63,10 +63,19 @@ loopback port — the app never learns iroh exists.
 - [x] `connector.py` — serve path implemented against the uniffi bindings;
       normalize/claims/registration smoke-tested (bindings not required for
       those).
-- [x] `desktop/connector.mjs` — ported from the reference branch's
-      `iroh-connection.ts` (all hard-won fixes retained: ticket sanitizer,
-      broken-main workaround, deterministic ports, teardown map).
-- [ ] End-to-end proof: pxl `hermes remote serve` ↔ desktop dial via
-      relay.agentbox.tech. Track on the Grist board.
+- [x] **Server-side e2e proven on pxl (2026-10-13):** plugin serve() in
+      the glibc container, untouched reference client dials the live
+      ticket → dashboard HTML (200, 10KB) through the pipe in ~26ms.
+      Wire-format compat with the reference bridges confirmed in the field.
+- [ ] Desktop-side dial through the seam (`desktop/connector.mjs` loaded by
+      the loader in the forked desktop build) — next gate.
 - [ ] `connect()` server-half dialer (headless automation) — deferred,
       raises `NotImplementedError` honestly for now.
+
+### Binding lessons (field, 2026-10-13)
+- `Endpoint.watch_addr` never worked in Python: bare callable →
+  `TypeError: expected AddrChangeCallback subclass`; a real subclass →
+  `InternalError: there is no reactor running` from inside the FFI.
+  The reference bridge silently ran on **static tickets** because of this.
+  The connector uses a plain async poll of `endpoint.addr()` instead —
+  live tickets, no FFI callbacks.

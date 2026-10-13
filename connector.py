@@ -113,8 +113,21 @@ class IrohConnector(RemoteConnector):
         if node_id is not None:
             id_file.write_text(str(node_id), encoding="utf-8")
 
-        if hasattr(endpoint, "watch_addr"):
-            endpoint.watch_addr(write_ticket)
+        # No uniffi AddrChangeCallback: it raises "no reactor running" from
+        # inside watch_addr (and the bare-callable form TypeErrors — the
+        # reference bridge ran static tickets because of it). A plain async
+        # poll of endpoint.addr() gets live tickets with no FFI callbacks.
+        async def ticket_loop() -> None:
+            last = ""
+            while True:
+                try:
+                    ticket = str(iroh.EndpointTicket.from_addr(endpoint.addr()))
+                    if ticket and ticket != last:
+                        ticket_file.write_text(ticket, encoding="utf-8")
+                        last = ticket
+                except Exception as exc:
+                    print(f"[iroh-connector] ticket refresh failed: {exc}", flush=True)
+                await asyncio.sleep(60)
 
         async def pipe_stream(stream) -> None:
             try:
@@ -180,9 +193,11 @@ class IrohConnector(RemoteConnector):
                 asyncio.create_task(serve_conn())
 
         loop_task = asyncio.create_task(accept_loop())
+        tick_task = asyncio.create_task(ticket_loop())
 
         async def teardown() -> None:
             loop_task.cancel()
+            tick_task.cancel()
             try:
                 await endpoint.close()
             except Exception:
