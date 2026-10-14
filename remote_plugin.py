@@ -1,14 +1,14 @@
-"""iroh remote gateway connector — the accept/dial transport for Hermes.
+"""iroh remote gateway plugin — the accept/dial transport for Hermes.
 
 Server half: ``serve()`` exposes the local gateway over iroh (persistent
 identity key, live ticket file, accept-loop piping every bidi stream to the
 gateway). ``connect()`` dials a saved ``iroh://<ticket>`` to a loopback
-access point (headless CLI automation; the desktop connector in
-``desktop/connector.mjs`` is the interactive twin).
+access point (headless CLI automation; the desktop remote plugin in
+``desktop/remote.mjs`` is the interactive twin).
 
-Wire format (connector-internal, ours to own): one bidi stream per TCP
+Wire format (remote plugin-internal, ours to own): one bidi stream per TCP
 connection, raw HTTP/WS bytes both directions, ALPN ``hermes-http/0`` —
-byte-identical to the desktop connector and the historical
+byte-identical to the desktop remote plugin and the historical
 ``tools/iroh/iroh_bridge_{server,client}.py`` on the reference branch.
 
 Requires the ``iroh`` Python bindings (pip iroh==1.1.0, glibc; pxl dials
@@ -23,7 +23,7 @@ import os
 import pathlib
 from typing import Any
 
-from gateway.remote_connectors import RemoteConnector, RemoteTarget, ServeHandle
+from gateway.remote_plugins import RemotePlugin, RemoteTarget, ServeHandle
 
 ALPN = b"hermes-http/0"
 READ_CHUNK = 64 * 1024
@@ -37,7 +37,7 @@ def _import_iroh():
         return iroh
     except ImportError as exc:  # pragma: no cover - environment-dependent
         raise RuntimeError(
-            "iroh-connector needs the iroh bindings: pip install iroh==1.1.0 "
+            "iroh-remote plugin needs the iroh bindings: pip install iroh==1.1.0 "
             "(glibc; on musl hosts run inside the glibc container)"
         ) from exc
 
@@ -53,7 +53,7 @@ def load_secret_key(keyfile: pathlib.Path) -> bytes:
     return sk
 
 
-class IrohConnector(RemoteConnector):
+class IrohConnector(RemotePlugin):
     scheme = "iroh"
     hint = "Paste the ticket from the remote box (the 'endpoint…' string), or pair by node id."
     paste_pattern = r"[a-z2-7]{60,}"
@@ -126,14 +126,14 @@ class IrohConnector(RemoteConnector):
                         ticket_file.write_text(ticket, encoding="utf-8")
                         last = ticket
                 except Exception as exc:
-                    print(f"[iroh-connector] ticket refresh failed: {exc}", flush=True)
+                    print(f"[iroh-remote plugin] ticket refresh failed: {exc}", flush=True)
                 await asyncio.sleep(60)
 
         async def pipe_stream(stream) -> None:
             try:
                 target_reader, target_writer = await asyncio.open_connection(target_host, target_port)
             except Exception as exc:
-                print(f"[iroh-connector] pipe: cannot reach {target_host}:{target_port}: {exc}", flush=True)
+                print(f"[iroh-remote plugin] pipe: cannot reach {target_host}:{target_port}: {exc}", flush=True)
                 try:
                     await stream.send.reset(0)
                 except Exception:
@@ -178,7 +178,7 @@ class IrohConnector(RemoteConnector):
                     accepted = await incoming.accept()
                     conn = await accepted.connect()
                 except Exception as exc:
-                    print(f"[iroh-connector] accept failed: {exc}", flush=True)
+                    print(f"[iroh-remote plugin] accept failed: {exc}", flush=True)
                     continue
 
                 async def serve_conn(conn=conn) -> None:
@@ -186,7 +186,7 @@ class IrohConnector(RemoteConnector):
                         try:
                             stream = await conn.accept_bi()
                         except Exception as exc:
-                            print(f"[iroh-connector] connection closed: {exc}", flush=True)
+                            print(f"[iroh-remote plugin] connection closed: {exc}", flush=True)
                             return
                         asyncio.create_task(pipe_stream(stream))
 
@@ -231,7 +231,7 @@ class IrohConnector(RemoteConnector):
             try:
                 stream = await conn.open_bi()
             except Exception as exc:
-                print(f"[iroh-connector] open_bi failed: {exc}", flush=True)
+                print(f"[iroh-remote plugin] open_bi failed: {exc}", flush=True)
                 writer.close()
                 return
 
@@ -276,7 +276,7 @@ class IrohConnector(RemoteConnector):
 
         if server is None:
             await endpoint.close()
-            raise RuntimeError(f"iroh-connector: no free loopback port ({last_err})")
+            raise RuntimeError(f"iroh-remote plugin: no free loopback port ({last_err})")
 
         async def teardown() -> None:
             server.close()
@@ -300,4 +300,4 @@ class IrohConnector(RemoteConnector):
 
 
 def register(ctx) -> None:
-    ctx.register_remote_connector(IrohConnector())
+    ctx.register_remote_plugin(IrohConnector())

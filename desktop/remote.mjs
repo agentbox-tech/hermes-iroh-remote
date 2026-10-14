@@ -1,16 +1,16 @@
 /**
- * iroh remote gateway connector — DESKTOP MAIN-PROCESS half.
+ * iroh remote gateway plugin — DESKTOP MAIN-PROCESS half.
  *
- * Loaded by the Hermes desktop's connector loader (`<desktop-plugins-root>/
- * iroh-connector/connector.mjs`) into the Electron MAIN process. Implements
- * the RemoteConnector contract (remote-connector-registry.ts): own the
+ * Loaded by the Hermes desktop's remote plugin loader (`<desktop-plugins-root>/
+ * iroh-remote plugin/remote.mjs`) into the Electron MAIN process. Implements
+ * the RemotePlugin contract (remote-remote plugin-registry.ts): own the
  * scheme, own the pipe. Downstream of connect() everything is plain HTTP on
  * a deterministic loopback port — fetch, WS upgrade, token adoption and
  * revalidation ride the pipe unaware.
  *
  * Wire format (ours): one bidi stream per TCP connection, raw HTTP/WS bytes
  * both directions, ALPN 'hermes-http/0' — byte-identical to the server half
- * (connector.py) and the reference-branch bridges.
+ * (remote_plugin.py) and the reference-branch bridges.
  *
  * Native binding: @number0/iroh is staged next to this file by the
  * dl.agentbox.tech release pipeline (NOT a dependency of the desktop app —
@@ -23,7 +23,7 @@ import { createRequire as nodeCreateRequire } from 'node:module'
 const IROH_SCHEME = 'iroh'
 const ALPN = Array.from(new TextEncoder().encode('hermes-http/0'))
 
-const connectorRequire = nodeCreateRequire(import.meta.url)
+const remote pluginRequire = nodeCreateRequire(import.meta.url)
 
 let binding = null
 
@@ -41,12 +41,12 @@ function native() {
 
     for (const spec of BINDING_SPECS) {
       try {
-        binding = connectorRequire(path.join(path.dirname(import.meta.url.slice('file://'.length)), spec))
+        binding = remote pluginRequire(path.join(path.dirname(import.meta.url.slice('file://'.length)), spec))
 
         return binding
       } catch (err) {
         try {
-          binding = connectorRequire(spec)
+          binding = remote pluginRequire(spec)
 
           return binding
         } catch (err2) {
@@ -236,7 +236,7 @@ async function ensureTunnel(ticket, log) {
 }
 
 export default {
-  id: 'iroh-connector',
+  id: 'iroh-remote plugin',
   scheme: IROH_SCHEME,
   hint: 'Paste the ticket from the remote box (the "endpoint…" string). Runs over iroh P2P via relay.agentbox.tech.',
   pastePattern: '^[a-z2-7]{60,}$',
