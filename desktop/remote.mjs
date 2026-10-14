@@ -2,18 +2,18 @@
  * iroh remote gateway plugin — DESKTOP MAIN-PROCESS half.
  *
  * Loaded by the Hermes desktop's remote plugin loader (`<desktop-plugins-root>/
- * iroh-remote plugin/remote.mjs`) into the Electron MAIN process. Implements
+ * iroh-remote/remote.mjs`) into the Electron MAIN process. Implements
  * the RemotePlugin contract (remote-remote plugin-registry.ts): own the
  * scheme, own the pipe. Downstream of connect() everything is plain HTTP on
  * a deterministic loopback port — fetch, WS upgrade, token adoption and
  * revalidation ride the pipe unaware.
  *
- * Wire format (ours): one bidi stream per TCP connection, raw HTTP/WS bytes
- * both directions, ALPN 'hermes-http/0' — byte-identical to the server half
- * (remote_plugin.py) and the reference-branch bridges.
+ * Wire format: one bidi stream per TCP connection, raw HTTP/WS bytes
+ * both directions, ALPN 'hermes-http/0' — byte-identical to the server
+ * half (remote_plugin.py).
  *
  * Native binding: @number0/iroh is staged next to this file by the
- * dl.agentbox.tech release pipeline (NOT a dependency of the desktop app —
+ * plugin's release pipeline (NOT a dependency of the desktop app —
  * the whole point of the seam: no native Rust binding in the app's tree).
  */
 import net from 'node:net'
@@ -23,7 +23,7 @@ import { createRequire as nodeCreateRequire } from 'node:module'
 const IROH_SCHEME = 'iroh'
 const ALPN = Array.from(new TextEncoder().encode('hermes-http/0'))
 
-const remote pluginRequire = nodeCreateRequire(import.meta.url)
+const remotePluginRequire = nodeCreateRequire(import.meta.url)
 
 let binding = null
 
@@ -41,12 +41,12 @@ function native() {
 
     for (const spec of BINDING_SPECS) {
       try {
-        binding = remote pluginRequire(path.join(path.dirname(import.meta.url.slice('file://'.length)), spec))
+        binding = remotePluginRequire(path.join(path.dirname(import.meta.url.slice('file://'.length)), spec))
 
         return binding
       } catch (err) {
         try {
-          binding = remote pluginRequire(spec)
+          binding = remotePluginRequire(spec)
 
           return binding
         } catch (err2) {
@@ -72,7 +72,7 @@ function parseTicket(value) {
   const clean = inline.replace(/:[0-9]+$/, '').replace(/[^a-z2-7]/g, '')
 
   if (!clean) {
-    throw new Error('iroh connections need a ticket (the "endpoint…" string from the remote box).')
+    throw new Error('iroh connections need a ticket (the "endpoint…" string from the remote machine).')
   }
 
   try {
@@ -236,9 +236,9 @@ async function ensureTunnel(ticket, log) {
 }
 
 export default {
-  id: 'iroh-remote plugin',
+  id: 'iroh-remote',
   scheme: IROH_SCHEME,
-  hint: 'Paste the ticket from the remote box (the "endpoint…" string). Runs over iroh P2P via relay.agentbox.tech.',
+  hint: 'Paste the ticket from the remote machine (the "endpoint…" string). Runs over iroh P2P.',
   pastePattern: '^[a-z2-7]{60,}$',
 
   normalize(url) {
